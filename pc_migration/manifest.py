@@ -116,6 +116,9 @@ def main() -> int:
     a = p.parse_args()
     try:
         return {"make": cmd_make, "verify": cmd_verify, "diff": cmd_diff}[a.cmd](a)
+    except C.MeasureError as e:        # 잠긴 파일 등 — 목록을 반쪽으로 남기지 않는다
+        print(f"🔴 {e}", file=sys.stderr)
+        return 1
     except (FileNotFoundError, ValueError) as e:
         print(f"🔴 {e}", file=sys.stderr)
         return 2

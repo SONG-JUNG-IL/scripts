@@ -11,8 +11,11 @@
     ② 새 PC 사본(--src)에 옮길 파일이 모두 있고 크기가 최종 목록과 같은가
     ③ 차분 = 기준 ↔ 최종 → 이동 · 변경 · 추가 · 삭제
     ④ (--apply) 덮이거나 지워질 원 PC 파일은 _업무 연계_/복귀전백업_시각/ 에 같은 상대경로로 남긴다
-       이동(원 PC 안에서 옮김 · 두 단계라 맞바꿈도 안전) → 변경 → 추가 → 삭제(백업 폴더로 옮김) → 빈 폴더 정리
-    ⑤ 최종 목록의 모든 파일을 원 PC 에서 다시 재어 sha1 이 같은지 · 삭제·이동 전 자리가 비었는지
+       이동 1단계(임시 자리로 뺌) → 삭제(백업 폴더로 옮김) → 이동 2단계(제자리) → 변경 → 추가 → 빈 폴더 정리
+       삭제를 추가·이동보다 먼저 하는 까닭: Windows 는 대소문자를 가리지 않아 'a.md' 삭제 + 'A.md' 추가가
+       같은 파일을 가리킨다. 추가 뒤에 삭제하면 방금 넣은 새 파일을 지워 버린다.
+    ⑤ 최종 목록의 모든 파일을 원 PC 에서 다시 재어 sha1 이 같은지 · 삭제·이동 전 자리가 비었는지(대소문자 구분)
+    ⑥ 새 PC 의 _업무 연계_(인계 문서 등)는 목록 밖이라 반영하지 않고, 원 PC _업무 연계_/새PC반납_시각/ 에 따로 둔다
 
 기준 목록에 없던 자리(복사하지 않은 output · _보관_ 등)는 삭제 대상이 될 수 없다. /MIR 을 쓰지 않는다.
 종료 코드: 0 = 성공(또는 미리 보기) · 1 = 멈춤/불일치 · 2 = 쓰임 오류.
@@ -87,7 +90,11 @@ def main() -> int:
     log.info(f"기준 {len(base):,}개 · 최종 {len(final):,}개(최종 목록 방식 {fh.get('mode')} · {fh.get('host')} {fh.get('made')})")
 
     # ① 원 PC 그대로인가
-    drift = M.verify(root, cfg, Path(a.baseline), a.quick, log)
+    try:
+        drift = M.verify(root, cfg, Path(a.baseline), a.quick, log)
+    except C.MeasureError as e:
+        log.error(f"🔴 ① 원 PC 를 잴 수 없음 — {e}")
+        return 1
     drift_items = [(k, it[0] if k == "moved" else it) for k in ("changed", "added", "deleted", "moved") for it in drift[k]]
     hard = [(k, r) for k, r in drift_items if not C.in_volatile(r, cfg)]
     for k, r in drift_items:
@@ -120,6 +127,20 @@ def main() -> int:
         log.info("미리 보기 끝 — 실제 반영은 --apply")
         return 0
 
+    # ②' 쓰기 전에 옮길 파일 sha1 을 모두 확인한다 — 반영 도중 불일치로 멈춰 반쪽 상태가 되는 것을 막는다
+    try:
+        got = C.measure(src, need, log)
+    except C.MeasureError as e:
+        log.error(f"🔴 ②' 새 PC 사본을 잴 수 없음 — {e}")
+        return 1
+    bad_src = [r for r in need if got[r].sha1 != final[r].sha1]
+    if bad_src:
+        for r in bad_src[:30]:
+            log.error(f"  새 PC 사본 sha1 이 최종 목록과 다름: {r}")
+        log.error(f"🔴 ②' 새 PC 사본이 최종 목록 뒤에 바뀌었습니다({len(bad_src)}건) — 새 PC 에서 최종 목록을 다시 만드십시오")
+        return 1
+    log.info(f"②' 새 PC 사본 sha1 확인 {len(need):,}개 — 모두 같음")
+
     # ④ 적용
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     bdir = root / "_업무 연계_" / f"복귀전백업_{ts}"
@@ -141,6 +162,10 @@ def main() -> int:
             put(src, root, t, final[t])
             done["moved_as_copy"] += 1
         rm_empty_parents(root, f)
+    for r in d["deleted"]:
+        backup(root, bdir, r, move=True)
+        rm_empty_parents(root, r)
+        done["deleted"] += 1
     for f, t in staged:
         backup(root, bdir, t, move=True)
         (root / t).parent.mkdir(parents=True, exist_ok=True)
@@ -154,23 +179,29 @@ def main() -> int:
         backup(root, bdir, r, move=True)    # 기준 밖에 같은 이름이 있었다면 남긴다
         put(src, root, r, final[r])
         done["added"] += 1
-    for r in d["deleted"]:
-        backup(root, bdir, r, move=True)
-        rm_empty_parents(root, r)
-        done["deleted"] += 1
     shutil.rmtree(stage, ignore_errors=True)
     log.info(f"   {done}")
 
     # ⑤ 검증
-    now = C.measure(root, sorted(final), log) if all((root / r).is_file() for r in final) else None
-    if now is None:
-        miss = [r for r in final if not (root / r).is_file()]
-        log.error(f"🔴 ⑤ 최종 목록 파일이 원 PC 에 없음 {len(miss)}: {miss[:20]}")
+    miss = [r for r in final if not (root / r).is_file() or not C.exists_exact(root, r)]
+    if miss:
+        log.error(f"🔴 ⑤ 최종 목록 파일이 원 PC 에 없음(대소문자 포함) {len(miss)}: {miss[:20]} — 백업 {bdir}")
+        return 1
+    try:
+        now = C.measure(root, sorted(final), log)
+    except C.MeasureError as e:
+        log.error(f"🔴 ⑤ 원 PC 를 다시 잴 수 없음 — {e}")
         return 1
     bad = [r for r in final if now[r].sha1 != final[r].sha1]
-    left = [r for r in d["deleted"] + [f for f, _ in d["moved"]] if (root / r).exists()]
+    left = [r for r in d["deleted"] + [f for f, _ in d["moved"]] if C.exists_exact(root, r)]
     rep = {"when": ts, "plan": d, "done": done, "sha1_mismatch": bad, "left_behind": left,
            "backup": str(bdir), "origin_drift": drift_items}
+    # ⑥ 새 PC 의 _업무 연계_ 는 따로 보관(원 PC 의 _업무 연계_ 를 덮지 않는다)
+    hsrc = src / "_업무 연계_"
+    if hsrc.is_dir():
+        hdst = root / "_업무 연계_" / f"새PC반납_{ts}"
+        shutil.copytree(hsrc, hdst, ignore=shutil.ignore_patterns("세션보관_*", "복귀전백업_*", "새PC반납_*", "__pycache__"))
+        log.info(f"⑥ 새 PC _업무 연계_ → {hdst}")
     (bdir / "_복귀기록.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
     if bad or left:
         log.error(f"🔴 ⑤ sha1 다름 {len(bad)} · 지워져야 할 자리에 남음 {len(left)} — {bdir / '_복귀기록.json'}")

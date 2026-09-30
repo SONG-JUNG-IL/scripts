@@ -169,6 +169,29 @@ def main() -> int:
         c3 = ["--config", cfgp, "--baseline", str(latest(orig3, "기준")), "--final", str(final), "--src", str(back), "--root", str(orig3)]
         check(run("return_apply.py", *c3, "--apply") == 1 and (orig3 / "MD/지침서 작업본.md").read_text(encoding="utf-8").startswith("# 지침서 μ"),
               "D1 사본이 모자라면 아무것도 바꾸지 않고 멈춤")
+
+        print("\n── E '#' 로 시작하는 파일 이름 · 대소문자만 바뀐 이름 · 삭제+같은 이름(대소문자 다름) 추가")
+        orig4 = tmp / "원PC4" / "21차_20260824"
+        build_origin(orig4)
+        w(orig4, "#메모.md", "샵으로 시작하는 이름\n")
+        w(orig4, "MD/case.md", "대소문자만 바뀔 파일\n")
+        w(orig4, "MD/old.md", "지워지고 같은 이름(대문자)으로 새로 생길 파일\n")
+        check(run("manifest.py", "--config", cfgp, "make", "--label", "기준", "--root", str(orig4)) == 0, "E0 기준")
+        base4 = latest(orig4, "기준")
+        _, be4 = C.read_manifest(base4)
+        check("#메모.md" in be4, "E1 '#' 로 시작하는 파일도 목록에 남음")
+        new4 = tmp / "새PC4" / "21차_20260824"
+        shutil.copytree(orig4, new4)
+        os.replace(new4 / "MD/case.md", new4 / "MD/_t"); os.replace(new4 / "MD/_t", new4 / "MD/CASE.md")
+        os.remove(new4 / "MD/old.md"); w(new4, "MD/OLD.md", "내용이 다른 새 파일\n")
+        check(run("manifest.py", "--config", cfgp, "make", "--label", "새PC최종", "--all", "--root", str(new4)) == 0, "E2 최종")
+        c4 = ["--config", cfgp, "--baseline", str(base4), "--final", str(latest(new4, "새PC최종")), "--src", str(new4), "--root", str(orig4)]
+        check(run("return_apply.py", *c4, "--apply") == 0, "E3 복귀 적용")
+        names = os.listdir(orig4 / "MD")
+        check("CASE.md" in names and "case.md" not in names and "OLD.md" in names and "old.md" not in names
+              and (orig4 / "MD/OLD.md").read_text(encoding="utf-8") == "내용이 다른 새 파일\n",
+              "E4 대소문자 이름 바뀜 · 삭제 뒤 새 파일이 남음(Windows 에서 특히 중요)")
+        check(any((orig4 / "_업무 연계_").glob("새PC반납_*")), "E5 새 PC _업무 연계_ 는 새PC반납_ 에 따로 보관")
     finally:
         if a.keep:
             print(f"\n시험 폴더 남김: {tmp}")

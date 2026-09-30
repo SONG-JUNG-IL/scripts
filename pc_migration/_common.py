@@ -173,30 +173,63 @@ def sha1_of(path: Path) -> str:
     return h.hexdigest()
 
 
+class MeasureError(OSError):
+    """파일을 잴 수 없었다(잠김 · 권한 · 도중에 사라짐). failed = [(상대경로, 사유)]."""
+
+    def __init__(self, failed: list[tuple[str, str]]) -> None:
+        self.failed = failed
+        head = "; ".join(f"{r} ({e})" for r, e in failed[:10])
+        super().__init__(f"잴 수 없는 파일 {len(failed)}개 — {head}"
+                         + (" …" if len(failed) > 10 else "")
+                         + " · Office/한글로 열린 파일·실행 중인 세션을 닫고 다시")
+
+
 def measure(root: Path, rels: list[str], log: logging.Logger | None = None,
             quick_from: dict[str, Entry] | None = None) -> dict[str, Entry]:
     """파일마다 크기·mtime·sha1 을 잰다.
 
     Args:
         quick_from: 주면 크기·mtime 이 같은 파일은 그 sha1 을 믿고 다시 읽지 않는다(--quick).
+    Raises:
+        MeasureError: 한 파일이라도 잴 수 없을 때(모두 잰 뒤 모아서 낸다).
     """
-    def one(rel: str) -> tuple[str, Entry]:
+    def one(rel: str) -> tuple[str, Entry | None, str]:
         p = root / rel
-        st = p.stat()
-        if quick_from and rel in quick_from:
-            old = quick_from[rel]
-            if old.size == st.st_size and old.mtime_ns == st.st_mtime_ns:
-                return rel, old
-        return rel, Entry(st.st_size, st.st_mtime_ns, sha1_of(p))
+        try:
+            st = p.stat()
+            if quick_from and rel in quick_from:
+                old = quick_from[rel]
+                if old.size == st.st_size and old.mtime_ns == st.st_mtime_ns:
+                    return rel, old, ""
+            return rel, Entry(st.st_size, st.st_mtime_ns, sha1_of(p)), ""
+        except OSError as e:          # PermissionError(공유 위반) · FileNotFoundError 등
+            return rel, None, f"{type(e).__name__}: {e.strerror or e}"
 
     out: dict[str, Entry] = {}
+    failed: list[tuple[str, str]] = []
     total = len(rels)
     with ThreadPoolExecutor(HASH_WORKERS) as ex:
-        for i, (rel, ent) in enumerate(ex.map(one, rels), 1):
-            out[rel] = ent
+        for i, (rel, ent, err) in enumerate(ex.map(one, rels), 1):
+            if ent is None:
+                failed.append((rel, err))
+            else:
+                out[rel] = ent
             if log and (i % 2000 == 0 or i == total):
                 log.info(f"  잼 {i:,}/{total:,}")
+    if failed:
+        raise MeasureError(failed)
     return out
+
+
+def exists_exact(root: Path, rel: str) -> bool:
+    """대소문자까지 같은 이름이 있는가(Windows 는 대소문자를 가리지 않아 Path.exists 로는 모른다)."""
+    p = root / rel
+    if not p.exists():
+        return False
+    try:
+        return p.name in os.listdir(p.parent)
+    except OSError:
+        return True
 
 
 def write_manifest(path: Path, entries: dict[str, Entry], mode: str, root: Path) -> None:
@@ -225,17 +258,22 @@ def read_manifest(path: Path) -> tuple[dict[str, str], dict[str, Entry]]:
         first = f.readline().rstrip("\n")
         if first != MANIFEST_MAGIC:
             raise ValueError(f"목록 파일이 아닙니다: {path}")
-        for line in f:
+        # 머리줄은 둘째 줄 하나뿐이다. 그 뒤로는 '#' 으로 시작해도 파일 이름이다
+        # (예: 21차 루트의 '#메모.md' — 정렬상 맨 앞에 온다).
+        second = f.readline().rstrip("\n")
+        if second.startswith("#"):
+            for kv in second[1:].strip().split("\t"):
+                if "=" in kv:
+                    k, v = kv.split("=", 1)
+                    head[k.strip()] = v
+        for n, line in enumerate(f, 3):
             line = line.rstrip("\n")
-            if line.startswith("#"):
-                for kv in line[1:].strip().split("\t"):
-                    if "=" in kv:
-                        k, v = kv.split("=", 1)
-                        head[k.strip()] = v
-                continue
             if not line:
                 continue
-            rel, size, mt, sha = line.split("\t")
+            parts = line.rsplit("\t", 3)
+            if len(parts) != 4:
+                raise ValueError(f"목록 {path.name} {n}번째 줄 꼴이 틀림: {line[:80]}")
+            rel, size, mt, sha = parts
             entries[rel] = Entry(int(size), int(mt), sha)
     return head, entries
 
