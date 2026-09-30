@@ -1,4 +1,4 @@
-& {
+﻿& {
 # PC 환경 조사 2판 — 원 PC · 새 PC 공통. 읽기만 한다(예외: 이전 자리 쓰기 시험 파일 하나를 만들고 바로 지움).
 # 결과: 바탕화면\환경조사_<PC이름>_<시각>.txt  (관리자 권한 불필요 · 일반 PowerShell 창)
 $desk = [Environment]::GetFolderPath('Desktop')
