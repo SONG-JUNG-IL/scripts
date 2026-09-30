@@ -7,6 +7,7 @@
     python scratch_evacuate.py --apply --with-unclassified   # 미분류 폴더도 넣는다
 
 넣고 뺄 폴더는 이전설정.json 의 scratch.sessions 에서 고친다. 낱개 파일(폴더 밖)은 loose_files=true 면 모두 넣는다.
+session 에 '*' 를 쓰면 그 프로젝트의 모든 세션을 세션 ID 별 하위 폴더로 대피한다(새 PC 는 세션 ID 를 몰라도 된다).
 """
 from __future__ import annotations
 
@@ -28,13 +29,17 @@ def dir_size(p: Path) -> tuple[int, int]:
     return n, b
 
 
-def find_scratch(cfg: dict, s: dict) -> Path | None:
+def find_scratch(cfg: dict, s: dict) -> list[tuple[str, Path]]:
+    """(세션 ID, scratchpad 경로) 목록. session 이 정확한 ID 면 하나, '*' 같은 무늬면 맞는 것 모두."""
     base = Path(C.expand(cfg["scratch"]["temp_base"]))
+    found: list[tuple[str, Path]] = []
     for proj in sorted(base.glob(s["project_like"])):
-        sp = proj / s["session"] / "scratchpad"
-        if sp.is_dir():
-            return sp
-    return None
+        for sd in sorted(proj.glob(s["session"])):
+            if (sd / "scratchpad").is_dir():
+                found.append((sd.name, sd / "scratchpad"))
+    if not any(ch in s["session"] for ch in "*?["):
+        found = found[:1]
+    return found
 
 
 def main() -> int:
@@ -52,12 +57,15 @@ def main() -> int:
     dest_root = root / cfg["scratch"]["dest"].format(date=a.date)
     index: list[str] = [f"# 세션보관 — {datetime.now():%Y-%m-%d %H:%M:%S}", ""]
     total_b = 0
+    jobs: list[tuple[dict, str, Path]] = []
     for s in cfg["scratch"]["sessions"]:
-        sp = find_scratch(cfg, s)
-        if sp is None:
+        hits = find_scratch(cfg, s)
+        if not hits:
             log.warning(f"{s['name']}: 임시 폴더를 찾지 못함 ({s['project_like']}/{s['session']})")
-            continue
-        log.info(f"── {s['name']} — {sp}")
+        wild = any(ch in s["session"] for ch in "*?[")
+        jobs += [(s, f"{s['name']}/{sid}" if wild else s["name"], sp) for sid, sp in hits]
+    for s, oname, sp in jobs:
+        log.info(f"── {oname} — {sp}")
         inc, exc = set(s.get("include_dirs", [])), set(s.get("exclude_dirs", []))
         take_dirs: list[Path] = []
         for d in sorted(x for x in sp.iterdir() if x.is_dir()):
@@ -80,10 +88,10 @@ def main() -> int:
         db = sum(dir_size(d)[1] for d in take_dirs)
         total_b += lb + db
         log.info(f"  낱개 파일 {len(loose):,}개 {C.fmt_bytes(lb)} · 넣을 폴더 {len(take_dirs)}개 {C.fmt_bytes(db)}")
-        index += [f"## {s['name']}", f"- 원래 자리: `{sp}`", f"- 낱개 파일 {len(loose)}개 · 폴더: "
+        index += [f"## {oname}", f"- 원래 자리: `{sp}`", f"- 낱개 파일 {len(loose)}개 · 폴더: "
                   + ", ".join(d.name for d in take_dirs), ""]
         if a.apply:
-            out = dest_root / s["name"]
+            out = dest_root / oname
             out.mkdir(parents=True, exist_ok=True)
             for f in loose:
                 shutil.copy2(f, out / f.name)

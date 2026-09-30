@@ -129,7 +129,7 @@ foreach ($f in "$d\drm시험.hwpx", "$d\drm시험.pdf") {
    claude --version            # 원 PC 와 비슷한 판(원 PC 세션 기록상 2.1.284)
    ```
 3. **10-02, 원 PC 설정 반영**(외장 `_환경\` 에서):
-   - `claude-guard.ps1`, `statusline.ps1` → `C:\Users\WIN11PRO_512\.claude\` (원 PC `settings.json` 이 이 절대 경로를 부른다)
+   - `claude-guard.ps1`, `statusline.ps1` → `C:\Users\WIN11PRO_512\.claude\` (원 PC `settings.json` 이 이 절대 경로를 부른다) **와** `C:\Users\USER\.claude\` 양쪽. 뒤쪽은 `env_check` 가 `~\.claude` 에서 찾기 때문이다(없으면 ⚠).
    - `bkit-claude-code\` → `C:\Users\WIN11PRO_512\bkit-claude-code\`
    - `CLAUDE.md`, `settings.json` → `C:\Users\USER\.claude\` 에 **덮어쓰지 않는다.** 이 PC 에도 자기 설정이 있으므로 두 벌을 견주어 합친다(원 PC 의 hooks · statusLine · 플러그인 줄을 이 PC 파일에 더한다). 합치기가 번거로우면 새 Claude 세션에 두 파일을 보여 주고 합치게 한다.
    - `skills\` → `C:\Users\USER\.claude\skills\` (같은 이름이 있으면 건너뛴다)
