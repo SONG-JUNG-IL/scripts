@@ -61,7 +61,7 @@ def build_origin(root: Path) -> None:
     w(root, "DICOCH_Tool_정본/코드 시연/캡처/cap54.py", "NEUTRAL = 'X:'\n")
     w(root, "MD/지침서 작업본.md", "# 지침서 μ ρ Σ ± ² ³\n")
     w(root, "MD/빈파일.md", "")
-    w(root, "데이터/양식_rev50.xlsx", os.urandom(2048))
+    w(root, "데이터/양식_rev50.xlsx", b"PK\x03\x04" + os.urandom(2044))
     w(root, "데이터/TEST_하회탈/데이터/CT_1/img.bin", os.urandom(3 * 2**20))
     w(root, "데이터/실증산출_옛/y.txt", "복사하지 않는 옛 산출\n")
     w(root, "_보관_구판/z.txt", "복사하지 않는 보관본\n")
@@ -117,7 +117,7 @@ def main() -> int:
         print("\n── B 새 PC 작업 → 복귀")
         w(newpc, "MD/지침서 작업본.md", "# 지침서 — 새 PC 에서 고침\n")                       # 변경
         w(newpc, "데이터/실증산출_새PC/n.txt", "새 산출\n")                                   # 추가(새 폴더)
-        w(newpc, "DICOCH_Tool_정본/DICOCH_Tool/dist/DICOCH_Tool_ver242.zip", os.urandom(4096))  # 추가(dist)
+        w(newpc, "DICOCH_Tool_정본/DICOCH_Tool/dist/DICOCH_Tool_ver242.zip", b"PK\x03\x04" + os.urandom(4092))  # 추가(dist)
         (newpc / "데이터/_보관_구판").mkdir(parents=True)
         os.replace(newpc / "데이터/양식_rev50.xlsx", newpc / "데이터/_보관_구판/양식_rev50.xlsx")  # 이동
         a_, b_ = newpc / "DICOCH_Tool_정본/DICOCH_Tool/app/a.py", newpc / "DICOCH_Tool_정본/DICOCH_Tool/app/b.py"
@@ -198,6 +198,22 @@ def main() -> int:
         check(bool(ret) and (ret[-1] / "세션보관_복귀_20261006/코드세션/q.txt").is_file()
               and not (ret[-1] / "세션보관_20261002").exists(),
               "E5 새 PC _업무 연계_ 는 새PC반납_ 에 따로 보관(새 대피본은 옴 · 원 PC 에 있는 대피본은 겹쳐 오지 않음)")
+
+        print("\n── F 새 PC 에서 보안 프로그램이 암호화한 파일(머리가 확장자와 다름)")
+        orig5 = tmp / "원PC5" / "21차_20260824"
+        build_origin(orig5)
+        run("manifest.py", "--config", cfgp, "make", "--label", "기준", "--root", str(orig5))
+        new5 = tmp / "새PC5" / "21차_20260824"
+        shutil.copytree(orig5, new5)
+        w(new5, "최종본/본문.hwpx", b"SCDSA002" + os.urandom(64))      # 암호화된 꼴
+        w(new5, "최종본/본문.pdf", b"%PDF-1.7\n" + os.urandom(64))    # 정상
+        run("manifest.py", "--config", cfgp, "make", "--label", "새PC최종", "--all", "--root", str(new5))
+        c5 = ["--config", cfgp, "--baseline", str(latest(orig5, "기준")), "--final", str(latest(new5, "새PC최종")),
+              "--src", str(new5), "--root", str(orig5)]
+        check(run("return_apply.py", *c5) == 1, "F1 머리가 안 맞는 파일이 있으면 미리 보기부터 멈춤")
+        check(run("return_apply.py", *c5, "--apply") == 1 and not (orig5 / "최종본/본문.hwpx").exists(), "F2 --apply 도 아무것도 바꾸지 않음")
+        check(run("manifest.py", "magic", str(new5 / "최종본")) == 1, "F3 manifest.py magic 이 의심 파일을 찾음")
+        check(run("return_apply.py", *c5, "--apply", "--allow-magic") == 0, "F4 --allow-magic 이면 진행")
     finally:
         if a.keep:
             print(f"\n시험 폴더 남김: {tmp}")

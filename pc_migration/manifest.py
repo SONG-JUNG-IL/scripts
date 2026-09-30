@@ -6,6 +6,7 @@
     python manifest.py make   --label 새PC최종 --all         # 복귀 직전(새 PC) — 21차 폴더 전체(exclude 제외)
     python manifest.py verify --manifest <목록.tsv> [--root <폴더>] [--quick] [--ignore-volatile]
     python manifest.py diff   <옛목록.tsv> <새목록.tsv> [--out 차분.json]
+    python manifest.py magic  <폴더>                          # hwpx·xlsx·pdf 등 머리 확인(DRM 암호화 의심 파일 찾기)
 
 verify 는 목록에 있는 파일이 모두 같은지 + (목록과 같은 방식으로 걸었을 때) 목록에 없는 파일이 새로 생겼는지를 본다.
 종료 코드: 0 = 같음 · 1 = 다름 · 2 = 쓰임 오류.
@@ -94,6 +95,23 @@ def cmd_diff(a: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_magic(a: argparse.Namespace) -> int:
+    """폴더 아래 파일의 머리가 확장자와 맞는지 본다. 종료 코드 0 = 모두 맞음 · 1 = 의심 있음."""
+    base = Path(a.folder).resolve()
+    n = 0
+    odd: list[tuple[str, str]] = []
+    for p in sorted(base.rglob("*")):
+        if p.is_file() and p.suffix.lower() in C.MAGIC:
+            n += 1
+            m = C.magic_mismatch(p)
+            if m:
+                odd.append((str(p.relative_to(base)), m))
+    for r, m in odd:
+        print(f"  🔴 {r}  [{m}]")
+    print(f"{'🔴 의심' if odd else '✅ 모두 맞음'} {len(odd)} / 검사 {n}개 — {base}")
+    return 1 if odd else 0
+
+
 def main() -> int:
     C.force_utf8_stdout()
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -113,9 +131,11 @@ def main() -> int:
     d.add_argument("old")
     d.add_argument("new")
     d.add_argument("--out")
+    g = sub.add_parser("magic")
+    g.add_argument("folder")
     a = p.parse_args()
     try:
-        return {"make": cmd_make, "verify": cmd_verify, "diff": cmd_diff}[a.cmd](a)
+        return {"make": cmd_make, "verify": cmd_verify, "diff": cmd_diff, "magic": cmd_magic}[a.cmd](a)
     except C.MeasureError as e:        # 잠긴 파일 등 — 목록을 반쪽으로 남기지 않는다
         print(f"🔴 {e}", file=sys.stderr)
         return 1

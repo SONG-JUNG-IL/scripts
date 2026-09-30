@@ -76,6 +76,8 @@ def main() -> int:
     p.add_argument("--apply", action="store_true")
     p.add_argument("--force", action="store_true", help="① 원 PC 가 기준과 달라도 진행(달라진 파일도 백업한 뒤 덮는다)")
     p.add_argument("--quick", action="store_true", help="① 대조를 크기·수정시각으로(빠름)")
+    p.add_argument("--allow-magic", action="store_true",
+                   help="②-2 확장자와 파일 머리가 안 맞는 파일(DRM 암호화 의심)이 있어도 진행")
     a = p.parse_args()
 
     root, src = Path(a.root).resolve(), Path(a.src).resolve()
@@ -122,6 +124,16 @@ def main() -> int:
         log.error(f"🔴 ② 새 PC 사본이 최종 목록과 다릅니다({len(lack)}건)")
         return 1
     log.info(f"② 새 PC 사본 — 옮길 파일 {len(need):,}개 · {C.fmt_bytes(sum(final[r].size for r in need))} 있음")
+
+    # ②-2 옮길 파일이 보안 프로그램으로 암호화되지 않았는가(hwpx·xlsx·pdf 등 머리 확인)
+    odd = [(r, m) for r in need if (m := C.magic_mismatch(src / r))]
+    for r, m in odd[:40]:
+        log.warning(f"  머리가 확장자와 다름(DRM 암호화 의심): {r}  [{m}]")
+    if odd and not a.allow_magic:
+        log.error(f"🔴 ②-2 머리가 안 맞는 파일 {len(odd)}건 — 새 PC 에서 복호화(반출)해 다시 만들거나, "
+                  "원래 그런 파일이면 확인 뒤 --allow-magic")
+        return 1
+    log.info(f"②-2 파일 머리 — 이상 {len(odd)}건")
 
     if not a.apply:
         log.info("미리 보기 끝 — 실제 반영은 --apply")

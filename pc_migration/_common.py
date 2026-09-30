@@ -319,6 +319,36 @@ def diff(old: dict[str, Entry], new: dict[str, Entry]) -> dict[str, list]:
     }
 
 
+# ── 파일 머리(매직 바이트) — 보안 프로그램(DRM) 암호화 탐지 ─────────────────────
+# 새 PC 에 문서 보안 프로그램(예: Softcamp)이 있으면 한글·Office 가 저장한 파일이 암호화되어
+# 원 PC 에서 열리지 않을 수 있다. 확장자가 약속하는 머리로 시작하지 않으면 의심한다.
+MAGIC: dict[str, tuple[int, bytes]] = {
+    ".hwpx": (0, b"PK"), ".xlsx": (0, b"PK"), ".xlsm": (0, b"PK"), ".docx": (0, b"PK"),
+    ".pptx": (0, b"PK"), ".zip": (0, b"PK"), ".odt": (0, b"PK"),
+    ".hwp": (0, b"\xD0\xCF\x11\xE0"), ".xls": (0, b"\xD0\xCF\x11\xE0"), ".doc": (0, b"\xD0\xCF\x11\xE0"),
+    ".pdf": (0, b"%PDF"), ".png": (0, b"\x89PNG"), ".jpg": (0, b"\xFF\xD8"), ".jpeg": (0, b"\xFF\xD8"),
+    ".dcm": (128, b"DICM"),
+}
+
+
+def magic_mismatch(path: Path) -> str | None:
+    """확장자에 맞는 머리가 아니면 실제 첫 8바이트(16진)를 돌려준다. 맞거나 검사 대상이 아니면 None."""
+    rule = MAGIC.get(path.suffix.lower())
+    if rule is None:
+        return None
+    off, sig = rule
+    try:
+        with open(path, "rb") as f:
+            head = f.read(off + len(sig))
+    except OSError as e:
+        return f"읽기 실패 {e.strerror or e}"
+    if len(head) == 0:
+        return None                      # 빈 파일은 따지지 않는다
+    if head[off:off + len(sig)] == sig:
+        return None
+    return head[:8].hex(" ")
+
+
 def in_volatile(rel: str, cfg: dict) -> bool:
     return _under(rel, [_norm(v) for v in cfg.get("volatile", [])]) or any(
         fnmatch.fnmatch(rel, _norm(v)) for v in cfg.get("volatile", []))
