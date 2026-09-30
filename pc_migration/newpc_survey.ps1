@@ -73,7 +73,7 @@ function Head8 {
     ''
     '== 3. Python (기준 3.14.7)'
     V py @('-0p')
-    V py @('list')
+    # 'py list' 는 설치 관리자를 스스로 갱신할 수 있어 조사에서 뺀다(읽기 전용 원칙)
     V uv
     if (Get-Command uv -ErrorAction SilentlyContinue) {
         'uv 가 가진 Python'
@@ -139,7 +139,8 @@ function Head8 {
         foreach ($k in "Registry::HKEY_CLASSES_ROOT\CLSID\$clsid\LocalServer32", "Registry::HKEY_CLASSES_ROOT\WOW6432Node\CLSID\$clsid\LocalServer32") {
             if (-not $srv) { $srv = (Get-ItemProperty $k -ErrorAction SilentlyContinue).'(default)' }
         }
-        $exe = ($srv -replace '^"([^"]+)".*$', '$1') -replace '\s+/.*$', ''
+        # 따옴표 없이 '…\hwp.exe -Automation' 꼴로도 등록되므로 .exe 까지만 자른다
+        $exe = if ($srv -match '^"([^"]+)"') { $Matches[1] } elseif ($srv -match '^(.+?\.exe)') { $Matches[1] } else { $srv }
         if ($exe -and (Test-Path $exe)) {
             $vi = (Get-Item $exe).VersionInfo
             "한글 실행 파일  $exe  판 $($vi.ProductVersion) (파일 $($vi.FileVersion))"
