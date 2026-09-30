@@ -1,0 +1,83 @@
+{
+  "_설명": "PC 이전·복귀 스크립트 공통 설정. 경로는 21차 폴더 기준 상대경로이고 구분자는 '/'. 10-02 오전에 이 파일만 고쳐 범위를 조정한다.",
+  "_작성": "2026-09-30 · PC이전_연계방안_20260930.md §3",
+
+  "scope": [
+    {"path": "DICOCH_Tool_정본", "note": "코드 정본 · dist · 코드 시연 포함(output · logs 등은 exclude)"},
+    {"path": "MD"},
+    {"path": "최종본"},
+    {"path": "tools_doc"},
+    {"path": "registration", "note": "build_public_resources 가 씀 — 게이트"},
+    {"path": "기준_DICOM"},
+    {"path": "기준_CIDOC CRM"},
+    {"path": "자료"},
+    {"path": "코드 오류"},
+    {"path": ".claude"},
+    {"path": ".bkit"},
+    {"path": "실무자시험_20260909/4_본보기_실증6종"},
+    {"path": "데이터", "files_only": true, "note": "데이터 루트의 양식·실증본 xlsx 만"},
+    {"path": "데이터/_작업_탬플릿갱신"},
+    {"path": "데이터/실증산출_20260930_1419_도구ver242"},
+    {"path": "데이터/TEST_국보 안동 하회탈", "note": "실촬영 원자료(demo_paths SOURCE_GLOB)"},
+    {"path": "데이터/TEST_신라왕경 은입사철기"},
+    {"path": ".", "files_only": true, "note": "21차 루트의 .bat · .lnk"},
+    {"path": "_업무 연계_", "manifest": false, "note": "복사는 하되 목록에는 넣지 않는다(목록 파일 자신이 들어 있으므로)"}
+  ],
+
+  "exclude": [
+    "DICOCH_Tool_정본/DICOCH_Tool/output",
+    "DICOCH_Tool_정본/DICOCH_Tool/logs",
+    "DICOCH_Tool_정본/DICOCH_Tool/_backup_before_merge_20260911",
+    "_업무 연계_/logs"
+  ],
+  "exclude_dir_names": ["__pycache__", ".pytest_cache"],
+  "exclude_file_suffixes": [".pyc"],
+
+  "_final_scan_설명": "새 PC 최종 목록(make --all)은 21차 폴더 전체를 exclude 규칙으로만 걸러 잰다. 아래는 그때 추가로 빼는 것.",
+  "final_extra_exclude": [],
+
+  "volatile": [
+    ".bkit/runtime",
+    ".bkit/state",
+    ".bkit/audit",
+    "DICOCH_Tool_정본/.bkit/runtime",
+    "DICOCH_Tool_정본/.bkit/state",
+    "DICOCH_Tool_정본/.bkit/audit",
+    ".claude/settings.local.json"
+  ],
+  "_volatile_설명": "원 PC '그대로인가' 검사에서 바뀌어도 멈추지 않는 자리(Claude/bkit 이 저절로 쓰는 곳). 복귀 반영은 이 자리도 새 PC 것으로 맞춘다.",
+
+  "scratch": {
+    "temp_base": "%LOCALAPPDATA%/Temp/claude",
+    "dest": "_업무 연계_/세션보관_{date}",
+    "sessions": [
+      {
+        "name": "코드세션",
+        "project_like": "*21--20260824-DICOCH-Tool---",
+        "session": "68c25178-814f-41dc-a944-bf50d3050c54",
+        "loose_files": true,
+        "include_dirs": ["pre242_canon", "pre242_md", "ver242_patch", "cap242", "g_A_oldcode_canon", "g_C_newcode_canon", "g_E_newcode_canon2", "gen_logs_canon", "sb_steps_logs"],
+        "exclude_dirs": ["sb240", "sb240_trash", "sb352", "sbPK", "step0_demo", "시간재기_실증산출_20260927_0735_도구ver238"]
+      },
+      {
+        "name": "문서세션",
+        "project_like": "C--Users-WIN11PRO-512-claude-work3-DICOCH----------21--20260824",
+        "session": "d01b923e-555b-4de8-a62a-e8d884184df4",
+        "loose_files": true,
+        "include_dirs": ["bk_0929_19b", "bk_0928_rev", "bk_0928_1142", "발행_리허설"],
+        "exclude_dirs": ["pylib", "__pycache__"]
+      }
+    ]
+  },
+
+  "env": {
+    "python": "3.14.7",
+    "mermaid_cli": "@mermaid-js/mermaid-cli@11.17.0",
+    "dicom3tools_dir": "C:/tools/dicom3tools/bin",
+    "display_scale_percent": 100,
+    "_display_설명": "원 PC 실측 100%(2026-09-30). 캡처는 코드 시연/캡처/cap54.py 가 QT_SCALE_FACTOR=1.5 로 따로 정하므로 OS 배율과 무관.",
+    "claude_home_files": ["CLAUDE.md", "settings.json", "statusline.ps1", "claude-guard.ps1"],
+    "claude_home_dirs": ["skills"],
+    "bkit_source": "C:/Users/WIN11PRO_512/bkit-claude-code"
+  }
+}
