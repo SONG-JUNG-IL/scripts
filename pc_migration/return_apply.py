@@ -200,7 +200,15 @@ def main() -> int:
     hsrc = src / "_업무 연계_"
     if hsrc.is_dir():
         hdst = root / "_업무 연계_" / f"새PC반납_{ts}"
-        shutil.copytree(hsrc, hdst, ignore=shutil.ignore_patterns("세션보관_*", "복귀전백업_*", "새PC반납_*", "__pycache__"))
+        have = root / "_업무 연계_"
+
+        def skip(d: str, names: list[str]) -> set[str]:
+            out = {n for n in names if n == "__pycache__"}
+            if Path(d) == hsrc:   # 맨 위: 원 PC 에 이미 있는 세션보관(복사 전 대피본)만 뺀다 — 새 PC 에서 새로 대피한 것은 가져온다
+                out |= {n for n in names if n.startswith(("복귀전백업_", "새PC반납_"))
+                        or (n.startswith("세션보관_") and (have / n).exists())}
+            return out
+        shutil.copytree(hsrc, hdst, ignore=skip)
         log.info(f"⑥ 새 PC _업무 연계_ → {hdst}")
     (bdir / "_복귀기록.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
     if bad or left:

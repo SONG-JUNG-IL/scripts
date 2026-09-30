@@ -184,6 +184,9 @@ def main() -> int:
         shutil.copytree(orig4, new4)
         os.replace(new4 / "MD/case.md", new4 / "MD/_t"); os.replace(new4 / "MD/_t", new4 / "MD/CASE.md")
         os.remove(new4 / "MD/old.md"); w(new4, "MD/OLD.md", "내용이 다른 새 파일\n")
+        w(orig4, "_업무 연계_/세션보관_20261002/코드세션/p.txt", "복사 전 대피본\n")
+        w(new4, "_업무 연계_/세션보관_20261002/코드세션/p.txt", "복사 전 대피본\n")
+        w(new4, "_업무 연계_/세션보관_복귀_20261006/코드세션/q.txt", "새 PC 에서 대피\n")
         check(run("manifest.py", "--config", cfgp, "make", "--label", "새PC최종", "--all", "--root", str(new4)) == 0, "E2 최종")
         c4 = ["--config", cfgp, "--baseline", str(base4), "--final", str(latest(new4, "새PC최종")), "--src", str(new4), "--root", str(orig4)]
         check(run("return_apply.py", *c4, "--apply") == 0, "E3 복귀 적용")
@@ -191,7 +194,10 @@ def main() -> int:
         check("CASE.md" in names and "case.md" not in names and "OLD.md" in names and "old.md" not in names
               and (orig4 / "MD/OLD.md").read_text(encoding="utf-8") == "내용이 다른 새 파일\n",
               "E4 대소문자 이름 바뀜 · 삭제 뒤 새 파일이 남음(Windows 에서 특히 중요)")
-        check(any((orig4 / "_업무 연계_").glob("새PC반납_*")), "E5 새 PC _업무 연계_ 는 새PC반납_ 에 따로 보관")
+        ret = sorted((orig4 / "_업무 연계_").glob("새PC반납_*"))
+        check(bool(ret) and (ret[-1] / "세션보관_복귀_20261006/코드세션/q.txt").is_file()
+              and not (ret[-1] / "세션보관_20261002").exists(),
+              "E5 새 PC _업무 연계_ 는 새PC반납_ 에 따로 보관(새 대피본은 옴 · 원 PC 에 있는 대피본은 겹쳐 오지 않음)")
     finally:
         if a.keep:
             print(f"\n시험 폴더 남김: {tmp}")
